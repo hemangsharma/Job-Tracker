@@ -10,6 +10,12 @@ A comprehensive Streamlit application for tracking and analyzing job application
 - **Skills Analysis**: Extract common skills from job descriptions to identify trends
 - **Timeline Tracking**: Monitor your application activity over time
 
+## Screenshots
+
+![Dashboard](screenshots/s1.png)
+![](screenshots/s2.png)
+![Applications](screenshots/s3.png)
+![DataAnalysis](screenshots/s4.png)
 
 ## Database Structure
 
