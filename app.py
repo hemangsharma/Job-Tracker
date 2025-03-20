@@ -74,7 +74,8 @@ def create_database():
             "location",
             "job_type",
             "last_updated",
-            "notes"
+            "notes",
+            "job_posting_link"  # New column for job posting link
         ])
         df.to_csv(DB_PATH, index=False)
         return df
@@ -92,7 +93,8 @@ def add_job_application(
     status,
     location,
     job_type,
-    notes
+    notes,
+    job_posting_link  # New parameter for job posting link
 ):
     df = pd.read_csv(DB_PATH)
     
@@ -108,7 +110,8 @@ def add_job_application(
         "location": location,
         "job_type": job_type,
         "last_updated": datetime.now().strftime("%Y-%m-%d"),
-        "notes": notes
+        "notes": notes,
+        "job_posting_link": job_posting_link  # Save the job posting link
     }
     
     df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
@@ -151,7 +154,6 @@ def generate_word_cloud(text):
 
 # Function to extract common skills from job descriptions
 def extract_common_skills(text):
-    # List of common technical skills to look for
     common_skills = [
         "python", "java", "javascript", "html", "css", "sql", "nosql", "aws", 
         "azure", "react", "angular", "vue", "node", "express", "django", "flask",
@@ -176,13 +178,10 @@ def extract_common_skills(text):
 
 # Main application
 def main():
-    # Create sidebar
     st.sidebar.title("Job Application Tracker")
     
-    # Create database if it doesn't exist
     df = create_database()
     
-    # Define navigation
     page = st.sidebar.selectbox(
         "Navigation",
         ["Dashboard", "Add Job Application", "View/Update Applications", "Data Analysis"]
@@ -208,47 +207,26 @@ def display_dashboard(df):
         st.info("No job applications to display. Start by adding a job application.")
         return
     
-    # Create metrics for the dashboard
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric(
-            label="Total Applications",
-            value=len(df)
-        )
+        st.metric(label="Total Applications", value=len(df))
     
     with col2:
         active_apps = len(df[~df['status'].isin(['Rejected', 'Withdrawn', 'Offer Declined', 'Offer Accepted'])])
-        st.metric(
-            label="Active Applications",
-            value=active_apps
-        )
+        st.metric(label="Active Applications", value=active_apps)
     
     with col3:
         offers = len(df[df['status'].isin(['Offer Received', 'Offer Accepted', 'Offer Declined'])])
-        st.metric(
-            label="Offers Received",
-            value=offers
-        )
+        st.metric(label="Offers Received", value=offers)
     
     with col4:
-        if len(df) > 0:
-            success_rate = round((offers / len(df)) * 100, 1)
-            st.metric(
-                label="Success Rate",
-                value=f"{success_rate}%"
-            )
-        else:
-            st.metric(
-                label="Success Rate",
-                value="0%"
-            )
+        success_rate = round((offers / len(df)) * 100, 1) if len(df) > 0 else 0
+        st.metric(label="Success Rate", value=f"{success_rate}%")
     
-    # Create two columns layout
     col1, col2 = st.columns(2)
     
     with col1:
-        # Status distribution
         st.subheader("Application Status")
         status_counts = df['status'].value_counts().reset_index()
         status_counts.columns = ['Status', 'Count']
@@ -263,7 +241,6 @@ def display_dashboard(df):
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        # Platform distribution
         st.subheader("Application Platforms")
         platform_counts = df['platform'].value_counts().reset_index()
         platform_counts.columns = ['Platform', 'Count']
@@ -276,7 +253,6 @@ def display_dashboard(df):
         )
         st.plotly_chart(fig, use_container_width=True)
     
-    # Timeline of applications
     st.subheader("Application Timeline")
     df['date_applied'] = pd.to_datetime(df['date_applied'])
     timeline_data = df.groupby(df['date_applied'].dt.strftime('%Y-%m-%d')).size().reset_index(name='count')
@@ -293,13 +269,11 @@ def display_dashboard(df):
     )
     st.plotly_chart(fig, use_container_width=True)
     
-    # Recent applications
     st.subheader("Recent Applications")
     recent_df = df.sort_values('date_applied', ascending=False).head(5)
     
-    # Format data for display
-    display_df = recent_df[['date_applied', 'company_name', 'position_title', 'status']].copy()
-    display_df.columns = ['Date Applied', 'Company', 'Position', 'Status']
+    display_df = recent_df[['date_applied', 'company_name', 'position_title', 'status', 'job_posting_link']].copy()
+    display_df.columns = ['Date Applied', 'Company', 'Position', 'Status', 'Job Posting Link']
     
     st.table(display_df)
 
@@ -316,11 +290,11 @@ def add_job_page(df):
             position_title = st.text_input("Position Title")
             location = st.text_input("Location")
             job_type = st.selectbox("Job Type", ["Full-time", "Part-time", "Contract", "Internship", "Freelance"])
+            job_posting_link = st.text_input("Job Posting Link")  # New input for job posting link
             
         with col2:
             selected_platform = st.selectbox("Application Platform", JOB_PLATFORMS)
             
-            # Conditionally show text input for custom platform
             if selected_platform == "Other":
                 custom_platform = st.text_input("Specify Platform")
                 platform = custom_platform if custom_platform else "Other"
@@ -353,7 +327,8 @@ def add_job_page(df):
                     status,
                     location,
                     job_type,
-                    notes
+                    notes,
+                    job_posting_link  # Pass the job posting link
                 )
                 st.success(f"Added application for {position_title} at {company_name}")
 
@@ -365,7 +340,6 @@ def view_update_page(df):
         st.info("No job applications to display. Start by adding a job application.")
         return
     
-    # Search and filter options
     st.subheader("Search and Filter")
     col1, col2, col3 = st.columns(3)
     
@@ -376,11 +350,9 @@ def view_update_page(df):
         status_filter = st.multiselect("Filter by status", ["All"] + APPLICATION_STATUSES, default=["All"])
     
     with col3:
-        # Get unique platforms from the database to include custom ones
         unique_platforms = ["All"] + sorted(df['platform'].unique().tolist())
         platform_filter = st.multiselect("Filter by platform", unique_platforms, default=["All"])
     
-    # Apply filters
     filtered_df = df.copy()
     
     if search_term:
@@ -395,14 +367,12 @@ def view_update_page(df):
     if "All" not in platform_filter:
         filtered_df = filtered_df[filtered_df['platform'].isin(platform_filter)]
     
-    # Display table with pagination
     st.subheader("Applications")
     
     if filtered_df.empty:
         st.info("No job applications match your filters.")
         return
     
-    # Create a paginated table view
     items_per_page = st.slider("Items per page", min_value=5, max_value=50, value=10, step=5)
     total_pages = (len(filtered_df) + items_per_page - 1) // items_per_page
     
@@ -415,22 +385,19 @@ def view_update_page(df):
     
     displayed_df = filtered_df.iloc[start_idx:end_idx].copy()
     displayed_df = displayed_df.reset_index()
-    displayed_df['index'] = displayed_df['index'].astype(int)  # Ensure index is integer for dataframe operations
+    displayed_df['index'] = displayed_df['index'].astype(int)
     
-    # Display simplified table
-    view_df = displayed_df[['index', 'date_applied', 'company_name', 'position_title', 'status']].copy()
-    view_df.columns = ['Index', 'Date Applied', 'Company', 'Position', 'Status']
+    view_df = displayed_df[['index', 'date_applied', 'company_name', 'position_title', 'status', 'job_posting_link']].copy()
+    view_df.columns = ['Index', 'Date Applied', 'Company', 'Position', 'Status', 'Job Posting Link']
     
     st.dataframe(view_df, use_container_width=True)
     
-    # Selection for application to update
     st.subheader("View/Update Application Details")
     selected_idx = st.number_input("Select application by index", min_value=0, max_value=len(df)-1 if len(df) > 0 else 0, value=int(view_df['Index'].iloc[0]) if not view_df.empty else 0)
     
     if selected_idx >= 0 and selected_idx < len(df):
         selected_app = df.iloc[selected_idx]
         
-        # Display and allow editing of the selected application
         with st.form("update_application_form"):
             st.subheader(f"{selected_app['position_title']} at {selected_app['company_name']}")
             
@@ -444,11 +411,9 @@ def view_update_page(df):
                 updated_job_type = st.selectbox("Job Type", ["Full-time", "Part-time", "Contract", "Internship", "Freelance"], index=["Full-time", "Part-time", "Contract", "Internship", "Freelance"].index(selected_app['job_type']))
                 
             with col2:
-                # Handle custom platforms in dropdown
                 all_platforms = JOB_PLATFORMS.copy()
                 current_platform = selected_app['platform']
                 
-                # Add the current platform to the list if it's not already there
                 if current_platform not in all_platforms and current_platform != "Other":
                     all_platforms.append(current_platform)
                 
@@ -458,7 +423,6 @@ def view_update_page(df):
                     index=all_platforms.index(current_platform) if current_platform in all_platforms else all_platforms.index("Other")
                 )
                 
-                # Show text input for custom platform
                 if selected_updated_platform == "Other":
                     custom_updated_platform = st.text_input(
                         "Specify Platform", 
@@ -474,6 +438,7 @@ def view_update_page(df):
             
             updated_job_description = st.text_area("Job Description", selected_app['job_description'])
             updated_notes = st.text_area("Notes", selected_app['notes'])
+            updated_job_posting_link = st.text_input("Job Posting Link", selected_app['job_posting_link'])  # New input for job posting link
             
             col1, col2 = st.columns(2)
             
@@ -498,7 +463,8 @@ def view_update_page(df):
                         "status": updated_status,
                         "location": updated_location,
                         "job_type": updated_job_type,
-                        "notes": updated_notes
+                        "notes": updated_notes,
+                        "job_posting_link": updated_job_posting_link  # Save the updated job posting link
                     }
                     
                     df = update_job_application(selected_idx, updated_data)
@@ -509,14 +475,11 @@ def view_update_page(df):
                     df = delete_job_application(selected_idx)
                     st.success(f"Deleted application for {selected_app['position_title']} at {selected_app['company_name']}")
 
-
 # Define a function to extract text from PDF
 def extract_text_from_pdf(pdf_file):
     text = ""
-    # Read the file-like object into memory
     pdf_bytes = pdf_file.read()
-    # Use fitz to open the PDF from bytes
-    doc = fitz.open("pdf", pdf_bytes)  # Specify "pdf" as the first argument
+    doc = fitz.open("pdf", pdf_bytes)
     for page in doc:
         text += page.get_text()
     return text
@@ -528,7 +491,6 @@ def analyze_keywords(text, keywords):
     score = sum(keyword_count.values())
     return score, keyword_count
 
-
 # Data analysis page
 def data_analysis_page(df):
     st.title("📈 Job Application Analysis")
@@ -537,15 +499,12 @@ def data_analysis_page(df):
         st.info("No job applications to analyze. Start by adding a job application.")
         return
     
-    # New functionality for CV analysis
     st.subheader("CV Analysis")
     
-    # File upload for CV and Cover Letter
     cv_file = st.file_uploader("Upload Your CV (PDF format only)", type=['pdf'])
     if cv_file is None:
         st.warning("Please upload a PDF file.")
     
-    # Define a list of keywords to analyze
     keywords = [
         "python", "java", "javascript", "html", "css", "sql", "nosql", "aws", 
         "azure", "react", "angular", "vue", "node", "express", "django", "flask",
@@ -559,15 +518,12 @@ def data_analysis_page(df):
     ]
     
     if cv_file:
-        # Extract text from the uploaded files
         cv_text = extract_text_from_pdf(cv_file)
         
-        # Analyze keywords in CV
         cv_score, cv_keyword_count = analyze_keywords(cv_text, keywords)
         st.subheader("CV Analysis")
         st.write(f"Score: {cv_score}")
         
-        # Display keyword counts in a bar chart
         st.bar_chart(cv_keyword_count)
 
         threshold = st.slider("Set Keyword Relevance Threshold", 0, 100, 50)
@@ -575,7 +531,6 @@ def data_analysis_page(df):
         st.write("Filtered Keyword Counts:")
         st.write(filtered_keywords)
     
-    # Success metrics
     st.subheader("Success Metrics")
     
     col1, col2, col3 = st.columns(3)
@@ -592,10 +547,8 @@ def data_analysis_page(df):
         interview_rate = len(df[df['status'].isin(['Phone Interview', 'Technical Interview', 'Onsite/Final Interview', 'Offer Received', 'Offer Accepted', 'Offer Declined'])]) / total_apps if total_apps > 0 else 0
         st.metric("Interview Rate", f"{interview_rate:.1%}")
     
-    # Time analysis
     st.subheader("Time-based Analysis")
     
-    # Applications per week
     df['date_applied'] = pd.to_datetime(df['date_applied'])
     df['application_week'] = df['date_applied'].dt.strftime('%Y-%U')
     
@@ -612,13 +565,11 @@ def data_analysis_page(df):
     )
     st.plotly_chart(fig, use_container_width=True)
     
-    # Salary analysis
     st.subheader("Salary Analysis")
     
     salary_df = df[(df['salary_min'] > 0) | (df['salary_max'] > 0)].copy()
     
     if not salary_df.empty:
-        # Calculate average or midpoint salary where available
         salary_df['avg_salary'] = salary_df.apply(
             lambda x: (x['salary_min'] + x['salary_max']) / 2 if x['salary_min'] > 0 and x['salary_max'] > 0 
             else x['salary_max'] if x['salary_min'] == 0 
@@ -629,7 +580,6 @@ def data_analysis_page(df):
         col1, col2 = st.columns(2)
         
         with col1:
-            # Salary distribution
             fig = px.histogram(
                 salary_df,
                 x='avg_salary',
@@ -639,7 +589,6 @@ def data_analysis_page(df):
             st.plotly_chart(fig, use_container_width=True)
         
         with col2:
-            # Salary by job type
             salary_by_type = salary_df.groupby('job_type')['avg_salary'].mean().reset_index()
             
             fig = px.bar(
@@ -653,17 +602,14 @@ def data_analysis_page(df):
     else:
         st.info("No salary data available for analysis.")
     
-    # Word cloud of job descriptions
     st.subheader("Job Description Analysis")
     
     all_job_descriptions = " ".join(df['job_description'].fillna(""))
     
     if all_job_descriptions.strip():
-        # Generate and display word cloud
         wordcloud_fig = generate_word_cloud(all_job_descriptions)
         st.pyplot(wordcloud_fig)
         
-        # Extract and display common skills
         skills = extract_common_skills(all_job_descriptions)
         
         if skills:
@@ -684,18 +630,14 @@ def data_analysis_page(df):
     else:
         st.info("No job descriptions available for analysis.")
     
-    # Application status analysis
     st.subheader("Application Status Analysis")
     
-    # Convert statuses to a numerical progression
     status_order = {status: i for i, status in enumerate(APPLICATION_STATUSES)}
     df['status_order'] = df['status'].map(status_order)
     
-    # Calculate how far applications have progressed
     progress_df = df.groupby('status')['status_order'].count().reset_index()
     progress_df['percentage'] = progress_df['status_order'] / len(df) * 100
     
-    # Create a funnel chart
     fig = go.Figure(go.Funnel(
         y=APPLICATION_STATUSES,
         x=progress_df['percentage'],
@@ -705,13 +647,11 @@ def data_analysis_page(df):
     fig.update_layout(title_text="Application Funnel")
     st.plotly_chart(fig, use_container_width=True)
     
-    # Platform success rate
     platform_success = df.groupby('platform').apply(
         lambda x: len(x[x['status'].isin(['Offer Received', 'Offer Accepted'])])/len(x) if len(x) > 0 else 0
     ).reset_index(name='success_rate')
     
     if len(platform_success) > 0:
-        # Only include platforms with at least a few applications for meaningful analysis
         platform_success = platform_success[platform_success['platform'].isin(df['platform'].value_counts().nlargest(5).index)]
         
         if not platform_success.empty:
