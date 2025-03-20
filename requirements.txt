@@ -12,4 +12,3 @@ io
 fitz
 PyMuPDF
 nltk
-pip install --upgrade pip setuptools
